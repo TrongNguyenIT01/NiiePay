@@ -92,6 +92,13 @@ public partial class NiiePayContext : DbContext
                 .HasMaxLength(20)
                 .IsUnicode(false);
 
+            entity.Property(e => e.TaiKhoanSoHuu)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.LoaiGiaoDich)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+
             entity.HasOne(d => d.MaNganHangNavigation).WithMany(p => p.GiaoDiches)
                 .HasForeignKey(d => d.MaNganHang)
                 .OnDelete(DeleteBehavior.ClientSetNull)

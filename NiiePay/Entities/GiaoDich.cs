@@ -22,6 +22,8 @@ public partial class GiaoDich
     public string? NoiDung { get; set; }
 
     public string TrangThai { get; set; } = null!;
+    public string TaiKhoanSoHuu { get; set; } = null!;
+    public string LoaiGiaoDich { get; set; } = null!;
 
     public virtual NganHang MaNganHangNavigation { get; set; } = null!;
 
