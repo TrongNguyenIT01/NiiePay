@@ -24,6 +24,17 @@ namespace NiiePay.Controllers
         {
             if (string.IsNullOrWhiteSpace(soTaiKhoan))
                 return BadRequest(new ApiResponse { Status = "FAIL", Message = "Vui lòng nhập số tài khoản." });
+            var isAccountExist = await _context.Accounts.AnyAsync(a => a.SoTaiKhoan == soTaiKhoan);
+            if (!isAccountExist)
+            {
+                return Ok(new ApiResponseGeneric { Status = "FAIL", Message = "Số tài khoản không tồn tại", Data = null });
+            }
+
+                if (tuNgay == default || denNgay == default)
+                return BadRequest(new ApiResponse { Status = "FAIL", Message = "Vui lòng nhập thông tin thời gian cần truy vấn." });
+
+            if (tuNgay > denNgay)
+                return BadRequest(new ApiResponse { Status = "FAIL", Message = "Mốc thời gian truy vấn chưa hợp lệ." });
 
             var denNgayEnd = denNgay.Date.AddDays(1).AddTicks(-1);
 
