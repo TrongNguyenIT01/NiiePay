@@ -351,43 +351,78 @@ public class ChuyenKhoanLienNganHangController : ControllerBase
             // try to find receiver first (by account number or phone)
             var receiver = await _context.Accounts.FirstOrDefaultAsync(a => a.SoTaiKhoan == req.TaiKhoanNhan || a.SoDienThoai == req.TaiKhoanNhan);
 
-            // Business rule: interbank transfers must be between different banks.
-            // If receiver exists in our DB and belongs to the same bank as sender -> reject and ask to use internal transfer.
-            if (receiver != null && string.Equals(receiver.MaNganHang, sender.MaNganHang, StringComparison.OrdinalIgnoreCase))
+            // If receiver exists in our DB, validate provided MaNganHang if present.
+            // If client provided a MaNganHang that doesn't match receiver's MaNganHang -> fail.
+            if (receiver != null)
             {
-                var failedSameBank = new GiaoDich
+                if (!string.IsNullOrWhiteSpace(req.MaNganHang) && !string.Equals(req.MaNganHang, receiver.MaNganHang, StringComparison.OrdinalIgnoreCase))
                 {
-                    MaGiaoDich = txnId,
-                    TaiKhoanGui = req.TaiKhoanGui,
-                    TaiKhoanNhan = req.TaiKhoanNhan,
-                    MaNganHang = receiver.MaNganHang,
-                    SoTien = req.SoTien,
-                    NoiDung = req.NoiDung,
-                    TrangThai = "FAILED",
-                    SoDuSauGiaoDich = null,
-                    ThoiGian = DateTime.Now,
-                    TaiKhoanSoHuu = req.TaiKhoanGui,   // MỚI
-                    LoaiGiaoDich = "M_out"             // MỚI
-                };
+                    var failedBankMismatch = new GiaoDich
+                    {
+                        MaGiaoDich = txnId,
+                        TaiKhoanGui = req.TaiKhoanGui,
+                        TaiKhoanNhan = req.TaiKhoanNhan,
+                        MaNganHang = req.MaNganHang,
+                        SoTien = req.SoTien,
+                        NoiDung = req.NoiDung,
+                        TrangThai = "FAILED",
+                        SoDuSauGiaoDich = null,
+                        ThoiGian = DateTime.Now,
+                        TaiKhoanSoHuu = req.TaiKhoanGui,
+                        LoaiGiaoDich = "M_out"
+                    };
 
-                _context.GiaoDiches.Add(failedSameBank);
-                await _context.SaveChangesAsync();
+                    _context.GiaoDiches.Add(failedBankMismatch);
+                    await _context.SaveChangesAsync();
 
-                var failedSameBankData = new
+                    await tx.RollbackAsync();
+                    return Ok(new ApiResponseGeneric { Status = "FAIL", Message = "Mã ngân hàng không khớp với ngân hàng của người nhận.", Data = new { failedBankMismatch.MaGiaoDich, failedBankMismatch.TaiKhoanGui, failedBankMismatch.TaiKhoanNhan, failedBankMismatch.MaNganHang, failedBankMismatch.SoTien, ThoiGian = failedBankMismatch.ThoiGian, SoDuSauGiaoDich = failedBankMismatch.SoDuSauGiaoDich, NoiDung = failedBankMismatch.NoiDung, TrangThai = failedBankMismatch.TrangThai } });
+                }
+
+                // If client did not provide MaNganHang, populate it from receiver's record.
+                if (string.IsNullOrWhiteSpace(req.MaNganHang))
                 {
-                    failedSameBank.MaGiaoDich,
-                    failedSameBank.TaiKhoanGui,
-                    failedSameBank.TaiKhoanNhan,
-                    failedSameBank.MaNganHang,
-                    failedSameBank.SoTien,
-                    ThoiGian = failedSameBank.ThoiGian,
-                    SoDuSauGiaoDich = failedSameBank.SoDuSauGiaoDich,
-                    NoiDung = failedSameBank.NoiDung,
-                    TrangThai = failedSameBank.TrangThai
-                };
+                    req.MaNganHang = receiver.MaNganHang;
+                }
 
-                await tx.RollbackAsync();
-                return Ok(new ApiResponseGeneric { Status = "FAIL", Message = "Tài khoản nhận cùng ngân hàng. Vui lòng dùng chuyển nội bộ (internal).", Data = failedSameBankData });
+                // Business rule: interbank transfers must be between different banks.
+                // If receiver belongs to the same bank as sender -> reject and ask to use internal transfer.
+                if (string.Equals(receiver.MaNganHang, sender.MaNganHang, StringComparison.OrdinalIgnoreCase))
+                {
+                    var failedSameBank = new GiaoDich
+                    {
+                        MaGiaoDich = txnId,
+                        TaiKhoanGui = req.TaiKhoanGui,
+                        TaiKhoanNhan = req.TaiKhoanNhan,
+                        MaNganHang = receiver.MaNganHang,
+                        SoTien = req.SoTien,
+                        NoiDung = req.NoiDung,
+                        TrangThai = "FAILED",
+                        SoDuSauGiaoDich = null,
+                        ThoiGian = DateTime.Now,
+                        TaiKhoanSoHuu = req.TaiKhoanGui,   // MỚI
+                        LoaiGiaoDich = "M_out"             // MỚI
+                    };
+
+                    _context.GiaoDiches.Add(failedSameBank);
+                    await _context.SaveChangesAsync();
+
+                    var failedSameBankData = new
+                    {
+                        failedSameBank.MaGiaoDich,
+                        failedSameBank.TaiKhoanGui,
+                        failedSameBank.TaiKhoanNhan,
+                        failedSameBank.MaNganHang,
+                        failedSameBank.SoTien,
+                        ThoiGian = failedSameBank.ThoiGian,
+                        SoDuSauGiaoDich = failedSameBank.SoDuSauGiaoDich,
+                        NoiDung = failedSameBank.NoiDung,
+                        TrangThai = failedSameBank.TrangThai
+                    };
+
+                    await tx.RollbackAsync();
+                    return Ok(new ApiResponseGeneric { Status = "FAIL", Message = "Tài khoản nhận cùng ngân hàng. Vui lòng dùng chuyển nội bộ (internal).", Data = failedSameBankData });
+                }
             }
 
             // If receiver does not exist in our DB, client must provide MaNganHang and it must be different from sender's bank
