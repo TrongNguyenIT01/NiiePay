@@ -4,15 +4,29 @@ using NiiePay.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddEndpointsApiExplorer();
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+                      policy =>
+                      {
+                          policy.WithOrigins("http://127.0.0.1:5500", "http://localhost:5500") // Chỉ định Port của Frontend
+                                .AllowAnyHeader()                     // Cho phép mọi header (Content-Type, Authorization...)
+                                .AllowAnyMethod()                     // Cho phép mọi HTTP method (GET, POST, PUT, DELETE, OPTIONS)
+                                .AllowCredentials();                  // Bắt buộc nếu có dùng Cookie hoặc Token Authentication
+                      });
+});
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddControllers();
 builder.Services.AddSwaggerGen();
 
 
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddDbContext<NiiePayContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("NiiePay")));
+builder.Services.AddDbContext<NiiePayContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("MyEstore")));
 
 var app = builder.Build();
 
@@ -36,7 +50,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
-
+app.UseCors(MyAllowSpecificOrigins);
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
